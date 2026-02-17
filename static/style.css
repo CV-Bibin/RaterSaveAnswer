@@ -1,0 +1,286 @@
+body { 
+    font-family: 'Segoe UI', 'Meera', 'Noto Sans Malayalam', sans-serif; 
+    background: #f0f2f5; 
+    padding: 20px; 
+    color: #1c1e21; 
+}
+
+.container { 
+    max-width: 1000px; 
+    margin: auto; 
+}
+
+/* --- Card & Layout --- */
+.card { 
+    background: white; 
+    padding: 20px; 
+    border-radius: 8px; 
+    margin-bottom: 20px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+}
+
+/* --- Task Header Section --- */
+.task-header { 
+    border-left: 5px solid #2563eb; 
+    padding-left: 15px; 
+    margin-bottom: 20px; 
+}
+
+.task-id { 
+    font-family: monospace; 
+    color: #64748b; 
+    font-size: 0.9em; 
+}
+
+.query-text { 
+    font-size: 1.5em; 
+    font-weight: bold; 
+    color: #1e293b; 
+    margin: 5px 0; 
+}
+
+/* Header Badges (Locale, Type, etc.) */
+.header-meta { 
+    display: flex; 
+    gap: 10px; 
+    margin-top: 8px; 
+    flex-wrap: wrap; 
+}
+
+.header-badge { 
+    background: #f1f5f9; 
+    color: #475569; 
+    padding: 4px 10px; 
+    border-radius: 12px; 
+    font-size: 0.8em; 
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* --- TABS Styles (New for Multi-Version) --- */
+.tab-header {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 5px;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 8px 16px;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+    transition: 0.2s;
+}
+
+.tab-btn:hover {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.tab-btn.active {
+    background: #e0f2fe;
+    color: #0284c7;
+    border-bottom: 3px solid #0284c7;
+    margin-bottom: -7px; /* Overlap the border */
+}
+
+/* Hide tab content by default */
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s;
+}
+
+/* Show active tab content */
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* --- Result Item Container --- */
+.res-container { 
+    border: 1px solid #e5e7eb; 
+    background: #fff;
+    /* Top padding 25px to clear the vote button */
+    padding: 25px 15px 15px 15px; 
+    border-radius: 8px; 
+    margin-top: 20px; 
+    position: relative; 
+    display: flex;
+    gap: 20px;
+}
+
+/* --- Left Side: Content --- */
+.res-content { 
+    flex: 1; 
+}
+
+.res-num { 
+    background: #3b82f6; 
+    color: white; 
+    display: inline-block; 
+    width: 25px; 
+    height: 25px; 
+    text-align: center; 
+    border-radius: 50%; 
+    font-size: 0.9em; 
+    line-height: 25px; 
+}
+
+.res-title { 
+    font-size: 1.1em; 
+    font-weight: bold; 
+    color: #111827; 
+    display: inline-block; 
+    margin-left: 10px; 
+}
+
+.res-sub { 
+    color: #64748b; 
+    font-size: 0.85em; 
+    margin-top: 4px; 
+    margin-left: 38px; 
+    line-height: 1.4;
+}
+
+/* Metadata tags (Category, Type) */
+.meta-tags { 
+    margin-top: 10px; 
+    margin-left: 38px; 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 8px; 
+}
+
+.tag { 
+    background: #f3f4f6; 
+    padding: 2px 8px; 
+    border-radius: 4px; 
+    font-size: 0.8em; 
+    color: #4b5563; 
+    border: 1px solid #e5e7eb; 
+}
+
+/* --- Right Side: Ratings --- */
+.res-ratings { 
+    width: 300px; 
+    border-left: 1px solid #e5e7eb; 
+    padding-left: 20px; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+}
+
+.rating-row { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 0.85em; 
+    margin-bottom: 5px; 
+    align-items: center; 
+}
+
+.r-label { color: #6b7280; }
+.r-val { font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+
+/* Dynamic Rating Colors */
+.val-Excellent, .val-Correct, .val-Good { color: #059669; background: #ecfdf5; }
+.val-Bad, .val-Incorrect { color: #dc2626; background: #fef2f2; }
+.val-Not-Rated { color: #9ca3af; font-style: italic; font-weight: normal; }
+
+/* n/a Special Style */
+.val-na { 
+    background: #f3f4f6; 
+    color: #4b5563; 
+    border: 1px solid #d1d5db; 
+    text-transform: uppercase; 
+    font-size: 0.8em; 
+    letter-spacing: 0.5px; 
+}
+
+/* --- Voting Buttons --- */
+.vote-box { 
+    position: absolute; 
+    top: -12px; /* Pulls button UP to sit on the border */
+    right: 15px; 
+    display: flex; 
+    gap: 8px; 
+    background: white; 
+    padding: 0 5px; 
+}
+
+.btn-vote { 
+    cursor: pointer; 
+    border: 1px solid #cbd5e1; 
+    background: #f8fafc; 
+    padding: 4px 10px; 
+    border-radius: 20px; 
+    font-size: 0.85em; 
+    box-shadow: 0 2px 2px rgba(0,0,0,0.05); 
+    transition: 0.2s; 
+    display: flex; 
+    align-items: center; 
+    gap: 5px; 
+}
+
+.btn-vote:hover { 
+    background: #e2e8f0; 
+    transform: translateY(-1px); 
+}
+
+/* --- Forms & Buttons --- */
+textarea { 
+    width: 100%; 
+    height: 150px; 
+    padding: 10px; 
+    border: 1px solid #cbd5e1; 
+    border-radius: 6px; 
+    margin-bottom: 10px; 
+    font-family: monospace; 
+    font-size: 0.85em; 
+}
+
+.btn-save { 
+    background: #2563eb; 
+    color: white; 
+    padding: 10px 20px; 
+    border: none; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    font-weight: bold; 
+}
+
+.msg { 
+    background: #dcfce7; 
+    color: #166534; 
+    padding: 10px; 
+    border-radius: 6px; 
+    margin-bottom: 20px; 
+    text-align: center; 
+}
+
+/* --- RATED ITEM STYLES (Highlighting Logic) --- */
+
+/* If the item is rated, change the title color */
+.rated-item .res-title {
+    color: #059669; /* Green text for title */
+}
+
+/* If the item is rated, change the number circle background */
+.rated-item .res-num {
+    background: #059669; /* Green circle */
+}
+
+/* If the item is rated, add a distinctive left border */
+.rated-item {
+    border-left: 5px solid #059669; 
+}
