@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Task Bank | 4-Row View</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f8fafc; padding: 20px; color: #334155; }
+        .container { max-width: 950px; margin: auto; }
+        .card { background: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }
+        th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+        th { background: #f1f5f9; width: 35%; color: #64748b; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        /* Highlight Empty Cells */
+        td:empty::after { content: ""; display: block; height: 20px; background: #fbfcfd; }
+        
+        .res-container { border: 1px solid #e2e8f0; padding: 20px; border-radius: 10px; margin-top: 20px; border-left: 6px solid #10b981; }
+        .res-title { color: #1e293b; font-size: 1.2rem; font-weight: bold; }
+        .res-subtitle { color: #64748b; font-size: 0.95rem; margin-bottom: 15px; }
+
+        .tag { background: #3b82f6; color: white; padding: 5px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        textarea { width: 100%; height: 120px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 12px; font-family: inherit; }
+        button { padding: 12px 24px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; background: #3b82f6; color: white; }
+        .btn-green { background: #10b981; width: 100%; margin-top: 10px; }
+        .msg { background: #dcfce7; color: #166534; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 style="text-align:center;">Task Rater Pro</h1>
+
+    {% if message %}<div class="msg">{{ message }}</div>{% endif %}
+
+    <div class="card">
+        <h3 style="margin-top:0;">🔍 Search</h3>
+        <form method="POST" style="display:flex; gap:10px;">
+            <input type="text" name="search_query" style="flex:1; padding:12px; border: 1px solid #cbd5e1; border-radius: 6px;" placeholder="Task ID or Query...">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    {% if search_results %}
+        {% for task in search_results %}
+        <div class="card" style="border-top: 5px solid #3b82f6;">
+            <span class="tag">TASK DETAILS</span>
+            <table>
+                {% for key, val in task.headers.items() %}
+                <tr><th>{{ key }}</th><td>{{ val }}</td></tr>
+                {% endfor %}
+            </table>
+
+            <span class="tag" style="background:#10b981;">RATED ANSWERS</span>
+            {% for res in task.results %}
+                <div class="res-container">
+                    <div class="res-title">{{ res.num }}. {{ res.title }}</div>
+                    <div class="res-subtitle">{{ res.subtitle }}</div>
+                    
+                    <p style="font-weight:bold; font-size:0.8rem; color:#94a3b8;">LOCATION INFORMATION</p>
+                    <table>
+                        {% for m in res.meta %}
+                        <tr><th>{{ m.label }}</th><td>{{ m.value }}</td></tr>
+                        {% endfor %}
+                    </table>
+
+                    <p style="font-weight:bold; font-size:0.8rem; color:#94a3b8;">FINAL RATINGS</p>
+                    <table style="border: 2px solid #f1f5f9;">
+                        {% for r in res.ratings %}
+                        <tr style="background: {{ 'white' if r.value else '#fdfdfd' }}">
+                            <th>{{ r.label }}</th>
+                            <td style="font-weight:bold; color: {{ '#059669' if r.value else '#cbd5e1' }}">
+                                {{ r.value }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card">
+        <h3>➕ Add Task</h3>
+        <form method="POST">
+            <textarea name="raw_text" placeholder="Paste full task page text here..."></textarea>
+            <button type="submit" class="btn-green">Analyze and Save</button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>
