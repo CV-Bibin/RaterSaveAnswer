@@ -103,9 +103,11 @@ def process_text(text):
         rel_m = re.search(r'Relevance\s*\n(.+)', content)
         rel_val = rel_m.group(1).strip() if rel_m else "Not Rated"
 
+      # Ratings table (Left side)
         ratings_table = [
             {"label": "Relevance", "value": rel_val},
-            {"label": "Name Acc", "value": get_val(r'Name Accuracy\s*\n(.+)')},
+            # UPDATE: Now catches both "Name Accuracy" and "Name and Category Accuracy"
+            {"label": "Name Acc", "value": get_val(r'(?:Name Accuracy|Name and Category Accuracy)\s*\n(.+)')},
             {"label": "Address Acc", "value": get_val(r'Address Accuracy\s*\n(.+)')},
             {"label": "Pin Acc", "value": get_val(r'(?:Pin Accuracy|Pin/Zip Accuracy)\s*\n(.+)')}
         ]
