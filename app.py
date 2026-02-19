@@ -1,40 +1,41 @@
-import sqlite3
-import re
+import os
 import json
+import re
 from flask import Flask, render_template, request, jsonify
-from collections import OrderedDict # Imported for grouping tasks
+import firebase_admin
+from firebase_admin import credentials, db
+from dotenv import load_dotenv
+from collections import OrderedDict
 
+# 1. LOAD ENVIRONMENT VARIABLES
+load_dotenv() 
+
+# 2. CREATE THE FLASK APP
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "secure_rater_key_2026")
 
-# --- Database Configuration ---
-def get_db_connection():
-    conn = sqlite3.connect('tasks.db', timeout=30)
-    conn.row_factory = sqlite3.Row
-    return conn
+# 3. INITIALIZE FIREBASE
+def initialize_firebase():
+    if not firebase_admin._apps:
+        cred_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+        db_url = os.getenv('DATABASE_URL')
+        
+        if cred_json:
+            cred_dict = json.loads(cred_json)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred, {'databaseURL': db_url})
+            print("Firebase Realtime DB connected.")
 
-def init_db():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS answers 
-                 (id INTEGER PRIMARY KEY, task_id TEXT, query TEXT, 
-                  header_info TEXT, rating_results TEXT)''')
-    conn.commit()
-    conn.close()
+initialize_firebase()
 
-init_db()
-
-# --- Helper Functions (Unchanged) ---
+# --- Helper Functions ---
 
 def clean_value(val):
-    """
-    Cleans up rating values. 
-    Returns 'n/a' if explicitly stated, otherwise '-' for missing/garbage.
-    """
     if not val: return "-"
     if val.strip().lower() == "n/a": return "n/a"
-
-    # List of headers that might accidentally get captured as values
+    
     garbage_headers = [
+        "Category", "Type", 
         "Street Number", "Unit/Apt", "Street Name", "Sub-Locality", 
         "Locality", "Region/State", "Postal Code", "Country", 
         "Address does not exist", "Language/Script issue", "Other Issue",
@@ -45,29 +46,17 @@ def clean_value(val):
     return val.strip()
 
 def is_valid_meta(val):
-    """
-    Checks if a metadata value (Distance/Lat,Lng) is valid.
-    It must contain digits. If it's a status message, return False.
-    """
     if not val: return False
-    # If the value is a known error message or status, ignore it
-    garbage_starts = ["Result name", "Business/POI", "Relevance", "Type", "Category", "Status"]
-    if any(val.startswith(k) for k in garbage_starts):
-        return False
-    
-    # Must contain at least one digit to be a distance or coordinate
-    if not re.search(r'\d', val):
-        return False
-        
+    garbage_starts = [
+        "Result name", "Business/POI", "Relevance", "Type", "Category", "Status",
+        "Distance to User", "Distance to Viewport", "Lat, Lng"
+    ]
+    if any(val.startswith(k) for k in garbage_starts): return False
     return True
 
 def process_text(text):
-    # --- 1. Header Extraction ---
     headers = {}
-    
-    # helper to find value by key
     def get_header(key):
-        # Matches "Key Name" followed by newline and then the Value
         m = re.search(rf'{key}\s*\n(.+)', text)
         return m.group(1).strip() if m else "Unknown"
 
@@ -76,14 +65,11 @@ def process_text(text):
     headers["Viewport Age"] = get_header("Viewport Age")
     headers["Locale"] = get_header("Locale")
     headers["Lat, Lng"] = get_header("Lat, Lng")
-
-    # Extract Query (Special case: often has double newlines)
+    
     q_match = re.search(r'Query\s*\n\s*\n(.+)', text)
-    if not q_match: 
-        q_match = re.search(r'Query\s*\n(.+)', text)
+    if not q_match: q_match = re.search(r'Query\s*\n(.+)', text)
     headers["Query"] = q_match.group(1).strip() if q_match else "Unknown Query"
 
-    # --- 2. Result Extraction ---
     raw_results = re.split(r'\n(\d+)\.\s*\n', text)
     processed_results = []
     
@@ -92,23 +78,16 @@ def process_text(text):
     for i in range(1, len(raw_results), 2):
         res_num = raw_results[i]
         content = raw_results[i+1].strip()
-        
         lines = [line.strip() for line in content.split('\n') if line.strip()]
-        title = ""
+        title = lines[0] if lines else ""
         subtitle = ""
+        if len(lines) > 1:
+            candidate = lines[1]
+            if not any(candidate.startswith(k) for k in system_keywords):
+                subtitle = candidate
 
-        if lines:
-            title = lines[0]
-            if len(lines) > 1:
-                candidate = lines[1]
-                is_keyword = any(candidate.startswith(k) for k in system_keywords)
-                if not is_keyword:
-                    subtitle = candidate
-
-        # Meta Data
         meta_table = []
         target_keys = ["Category", "Type", "Distance to User", "Distance to Viewport", "Lat, Lng"]
-        
         for key in target_keys:
             m = re.search(rf'{key}\s*\n(.+)', content)
             if m:
@@ -117,7 +96,6 @@ def process_text(text):
                      if not any(d['value'] == val for d in meta_table):
                         meta_table.append({"label": key, "value": val})
 
-        # Ratings
         def get_val(pattern):
             m = re.search(pattern, content, re.IGNORECASE)
             return clean_value(m.group(1).strip()) if m else "-"
@@ -125,15 +103,11 @@ def process_text(text):
         rel_m = re.search(r'Relevance\s*\n(.+)', content)
         rel_val = rel_m.group(1).strip() if rel_m else "Not Rated"
 
-        name_val = get_val(r'Name Accuracy\s*\n(.+)')
-        addr_val = get_val(r'Address Accuracy\s*\n(.+)')
-        pin_val  = get_val(r'(?:Pin Accuracy|Pin/Zip Accuracy)\s*\n(.+)')
-
         ratings_table = [
             {"label": "Relevance", "value": rel_val},
-            {"label": "Name Acc", "value": name_val},
-            {"label": "Address Acc", "value": addr_val},
-            {"label": "Pin Acc", "value": pin_val}
+            {"label": "Name Acc", "value": get_val(r'Name Accuracy\s*\n(.+)')},
+            {"label": "Address Acc", "value": get_val(r'Address Accuracy\s*\n(.+)')},
+            {"label": "Pin Acc", "value": get_val(r'(?:Pin Accuracy|Pin/Zip Accuracy)\s*\n(.+)')}
         ]
 
         processed_results.append({
@@ -143,115 +117,193 @@ def process_text(text):
             "meta": meta_table,
             "ratings": ratings_table,
             "upvotes": 0,
-            "downvotes": 0
+            "downvotes": 0,
+            "voters": {},
+            "notes": {} # New: Storage for comments
         })
 
     return headers.get("Task ID", ""), headers.get("Query", ""), headers, processed_results
 
-# --- Routes ---
+# --- ROUTES ---
+
+def get_fb_config():
+    return {
+        "apiKey": os.getenv("FIREBASE_API_KEY"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+        "databaseURL": os.getenv("DATABASE_URL"),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+        "appId": os.getenv("FIREBASE_APP_ID")
+    }
+
+@app.route('/login')
+def login_page():
+    return render_template('login.html', firebase_config=get_fb_config())
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
     message = ""
-    search_results = [] # This will be a list of grouped tasks
-    conn = get_db_connection()
-    
-    if request.method == 'POST':
-        # --- 1. SAVE NEW TASK LOGIC (UPDATED FOR VERSIONS) ---
-        if 'raw_text' in request.form:
-            raw = request.form['raw_text']
-            if not raw.strip():
-                message = "Error: Text was empty."
-            else:
-                try:
-                    t_id, q, headers, results = process_text(raw)
-                    if results:
-                        # NEW LOGIC: Check if this specific version exists
-                        existing_rows = conn.execute("SELECT rating_results FROM answers WHERE task_id = ?", (t_id,)).fetchall()
-                        
-                        is_duplicate = False
-                        new_results_json = json.dumps(results)
-                        
-                        # Compare new results with every existing version for this Task ID
-                        for row in existing_rows:
-                            if row['rating_results'] == new_results_json:
+    current_user_email = request.args.get('u', "").strip().lower()
+    sanitized_user = current_user_email.replace('.', ',')
+
+    if request.method == 'POST' and 'raw_text' in request.form:
+        user_email = request.form.get('user_email', "").strip().lower()
+        if not user_email:
+             message = "⚠️ Error: You must be logged in to save tasks."
+        else:
+            try:
+                t_id, q, headers, results = process_text(request.form['raw_text'])
+                if results:
+                    ref = db.reference('tasks')
+                    task_ref = ref.child(t_id)
+                    snapshot = task_ref.get()
+                    
+                    is_duplicate = False
+                    new_results_json = json.dumps(results)
+                    
+                    if snapshot:
+                        for key, val in snapshot.items():
+                            if json.dumps(val.get('rating_results')) == new_results_json:
                                 is_duplicate = True
                                 break
-                        
-                        if is_duplicate:
-                            message = f"Skipped: This exact version already exists for {q}."
-                        else:
-                            # Insert as NEW row (Do not delete old ones)
-                            conn.execute("INSERT INTO answers (task_id, query, header_info, rating_results) VALUES (?, ?, ?, ?)", 
-                                         (t_id, q, json.dumps(headers), new_results_json))
-                            conn.commit()
-                            message = f"Saved: New version added for {q}!"
-                    else:
-                        message = "Error: Could not parse results."
-                except Exception as e:
-                    message = f"Parsing Error: {str(e)}"
-        
-        # --- 2. SEARCH LOGIC ---
-        if 'search_query' in request.form:
-             q = request.form['search_query'].strip()
-             rows = conn.execute("SELECT * FROM answers WHERE task_id LIKE ? OR query LIKE ? ORDER BY id DESC", 
-                                ('%'+q+'%', '%'+q+'%')).fetchall()
-        else:
-             # Just load some recent ones if we just saved something
-             rows = conn.execute("SELECT * FROM answers ORDER BY id DESC LIMIT 50").fetchall()
+                    
+                    task_ref.push().set({
+                        'task_id': t_id, 'query': q, 'header_info': headers,
+                        'rating_results': results, 'submitted_by': user_email,
+                        'timestamp': {'.sv': 'timestamp'}
+                    })
+                    message = "✅ Version saved successfully!"
+            except Exception as e:
+                message = f"Error: {str(e)}"
 
-    else:
-        # --- 3. DEFAULT LOAD (GET REQUEST) ---
-        rows = conn.execute("SELECT * FROM answers ORDER BY id DESC LIMIT 50").fetchall()
-
-    # --- 4. GROUPING LOGIC (The Key Update) ---
-    # We transform the flat list of rows into a grouped structure:
-    # { 'TaskID_1': { headers:..., versions: [ {db_id:1, results:...}, {db_id:2, results:...} ] } }
+    ref = db.reference('tasks')
+    snapshot = ref.order_by_key().limit_to_last(40).get()
     
-    tasks_map = OrderedDict()
+    all_tasks = []
+    if snapshot:
+        for tid, versions in reversed(list(snapshot.items())):
+            v_list = []
+            h_data, q_str = {}, ""
+            for vid, vdata in versions.items():
+                h_data, q_str = vdata.get('header_info', {}), vdata.get('query', "")
+                v_list.append({
+                    'db_id': vid, 
+                    'results': vdata.get('rating_results', []),
+                    'author': vdata.get('submitted_by'),
+                    'voters': vdata.get('voters', {}),
+                    'notes': vdata.get('notes', {}) # Pass notes to template
+                })
+            all_tasks.append({'task_id': tid, 'headers': h_data, 'query': q_str, 'versions': v_list})
 
-    for row in rows:
-        tid = row['task_id']
-        
-        if tid not in tasks_map:
-            tasks_map[tid] = {
-                'task_id': tid,
-                'headers': json.loads(row['header_info']),
-                'versions': []
-            }
-        
-        tasks_map[tid]['versions'].append({
-            'db_id': row['id'],
-            'results': json.loads(row['rating_results'])
-        })
+    search_results = all_tasks
+    if request.method == 'POST' and 'search_query' in request.form:
+        sq = request.form['search_query'].strip().lower()
+        search_results = [t for t in all_tasks if sq in t['task_id'].lower() or sq in t['query'].lower()]
 
-    search_results = list(tasks_map.values())
-            
-    conn.close()
-    return render_template('home.html', message=message, search_results=search_results)
+    return render_template('home.html', search_results=search_results, message=message, firebase_config=get_fb_config(), sanitized_user=sanitized_user)
+
+# --- NEW: EDIT RESULT (AUTHOR ONLY) ---
+@app.route('/edit_result', methods=['POST'])
+def edit_result():
+    data = request.json
+    # Path to the specific result's ratings list
+    path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/ratings"
+    ver_ref = db.reference(f"tasks/{data['task_id']}/{data['ver_id']}")
+    
+    # Check if user is the author
+    if ver_ref.get().get('submitted_by') == data['user_email']:
+        # Update the ratings list with new data
+        db.reference(path).set(data['new_ratings'])
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Unauthorized"})
+
+# --- NEW: ADD NOTE (ALL USERS) ---
+@app.route('/add_note', methods=['POST'])
+def add_note():
+    data = request.json
+    if not data.get('note_text'): return jsonify({"success": False})
+    
+    # Path to notes for this specific result
+    path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/notes"
+    
+    note_obj = {
+        "user": data['user_email'],
+        "text": data['note_text'],
+        "timestamp": {'.sv': 'timestamp'}
+    }
+    
+    db.reference(path).push().set(note_obj)
+    return jsonify({"success": True})
+
+
+# --- NEW: DELETE NOTE ---
+@app.route('/delete_note', methods=['POST'])
+def delete_note():
+    data = request.json
+    # Path: tasks/{tid}/{vid}/rating_results/{idx}/notes/{note_id}
+    path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/notes/{data['note_id']}"
+    
+    note_ref = db.reference(path)
+    note_data = note_ref.get()
+    
+    # Check if the user trying to delete is the one who wrote it
+    if note_data and note_data.get('user') == data['user_email']:
+        note_ref.delete()
+        return jsonify({"success": True})
+    
+    return jsonify({"success": False, "error": "Unauthorized: You can only delete your own notes."})
+
+
 
 @app.route('/vote', methods=['POST'])
 def vote():
     data = request.json
-    db_id = data.get('id')
+    task_id = data.get('task_id')
+    ver_id = data.get('ver_id')
     res_idx = data.get('idx')
-    v_type = data.get('type')
+    vote_type = data.get('type')
+    user_email = data.get('user_email')
 
-    conn = get_db_connection()
+    if not user_email: return jsonify({"success": False, "error": "Login required"})
+
+    user_key = user_email.replace('.', ',')
+    path = f"tasks/{task_id}/{ver_id}/rating_results/{res_idx}"
+    item_ref = db.reference(path)
+
+    def toggle_vote(current_data):
+        if not current_data: return current_data
+        
+        if 'upvotes' not in current_data: current_data['upvotes'] = 0
+        if 'downvotes' not in current_data: current_data['downvotes'] = 0
+        if 'voters' not in current_data: current_data['voters'] = {}
+        
+        voters = current_data['voters']
+        previous_vote = voters.get(user_key)
+
+        if previous_vote == vote_type:
+            if vote_type == 'up': current_data['upvotes'] -= 1
+            else: current_data['downvotes'] -= 1
+            del voters[user_key]
+        else:
+            if previous_vote == 'up': current_data['upvotes'] -= 1
+            elif previous_vote == 'down': current_data['downvotes'] -= 1
+            
+            if vote_type == 'up': current_data['upvotes'] += 1
+            else: current_data['downvotes'] += 1
+            voters[user_key] = vote_type
+
+        current_data['voters'] = voters
+        return current_data
+
     try:
-        row = conn.execute("SELECT rating_results FROM answers WHERE id = ?", (db_id,)).fetchone()
-        if row:
-            results = json.loads(row['rating_results'])
-            if v_type == 'up': results[res_idx]['upvotes'] += 1
-            else: results[res_idx]['downvotes'] += 1
-            conn.execute("UPDATE answers SET rating_results = ? WHERE id = ?", (json.dumps(results), db_id))
-            conn.commit()
-            return jsonify({"success": True, "up": results[res_idx]['upvotes'], "down": results[res_idx]['downvotes']})
+        updated = item_ref.transaction(toggle_vote)
+        new_status = updated.get('voters', {}).get(user_key, None)
+        return jsonify({
+            "success": True, "up": updated['upvotes'], "down": updated['downvotes'], "user_status": new_status
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
-    finally:
-        conn.close()
-    return jsonify({"success": False})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

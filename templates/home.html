@@ -3,153 +3,318 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Rater - Multi Version</title>
+    <title>Task Rater Pro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script>
+        const firebaseConfig = {{ firebase_config | tojson }};
+        firebase.initializeApp(firebaseConfig);
+        let currentUserEmail = "";
+
+        firebase.auth().onAuthStateChanged((user) => {
+            if (!user) window.location.href = "/login";
+            else {
+                currentUserEmail = user.email;
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('u') !== user.email) window.location.href = "/?u=" + encodeURIComponent(user.email);
+                document.getElementById('hidden_user_email').value = user.email;
+                document.getElementById('user-display').innerText = user.email;
+            }
+        });
+        function logout() { firebase.auth().signOut().then(() => window.location.href = "/login"); }
+    </script>
+    <style>
+        /* --- Restore Side-by-Side Layout CSS --- */
+        
+        /* Flex wrapper for the main content area */
+        .res-body-row {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* Left Side: Content */
+        .res-content {
+            flex: 1; /* Takes remaining space */
+        }
+
+        /* Right Side: Panel for Votes & Ratings */
+        .res-right-panel {
+            width: 300px;
+            border-left: 1px solid #e2e8f0;
+            padding-left: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end; /* Align items to right */
+        }
+
+        /* Ratings Table: Vertical List again */
+        .res-ratings {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .rating-row {
+            display: flex;
+            justify-content: space-between; /* Label left, Value right */
+            align-items: center;
+            font-size: 0.9em;
+            border-bottom: 1px dashed #f1f5f9;
+            padding-bottom: 4px;
+        }
+
+        /* Vote Box Position */
+        .vote-box {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+        
+        /* Adjust for Caution Label Overlap */
+        .res-caution .res-right-panel {
+            padding-top: 15px; /* Push down slightly so votes don't hit the label */
+        }
+
+        /* --- Existing Styles Preserved --- */
+        .query-text { font-size: 1.4em; font-weight: 700; color: #4f46e5; margin: 8px 0; background: #eef2ff; padding: 8px 12px; border-radius: 6px; display: inline-block; border-left: 4px solid #4f46e5; }
+        .res-caution { border: 2px solid #ef4444; background-color: #fff5f5; position: relative; }
+        .res-caution::before { content: "⚠️ HIGH DISAGREEMENT"; position: absolute; top: 0; right: 0; background: #ef4444; color: white; font-size: 0.65em; padding: 2px 6px; border-bottom-left-radius: 4px; font-weight: bold; z-index: 10; }
+        
+        .action-bar { display: flex; gap: 8px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #e2e8f0; clear: both; }
+        .notes-section { margin-top: 10px; font-size: 0.85em; }
+        .note-item { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 4px 8px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+        .note-user { font-weight: bold; color: #d97706; margin-right: 5px; }
+        .del-note-btn { color: #ef4444; font-weight: bold; cursor: pointer; margin-left: 8px; font-size: 1.1em; opacity: 0.7; }
+        .del-note-btn:hover { opacity: 1; transform: scale(1.1); }
+        .vote-active-up { background-color: #d1fae5 !important; border-color: #059669 !important; color: #065f46 !important; }
+        .vote-active-down { background-color: #fee2e2 !important; border-color: #dc2626 !important; color: #991b1b !important; }
+        .btn-mini { border: none; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.75em; color: #64748b; display: flex; align-items: center; gap: 4px; }
+        .btn-mini:hover { background: #e2e8f0; color: #334155; }
+        .edit-input { border: 1px solid #3b82f6; padding: 2px 4px; border-radius: 3px; width: 80px; font-size: 0.9em; text-align: right; }
+    </style>
 </head>
 <body>
 
 <div class="container">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>📋 Task Rater <span style="font-size:0.6em; color:#666;">(Multi-Version)</span></h2>
-        <form method="POST" action="/" style="display:flex; gap:5px;">
-            <input type="text" name="search_query" placeholder="Search Query or ID..." style="padding:8px; border-radius:4px; border:1px solid #ccc;">
-            <button type="submit" class="btn-vote" style="background:#eee;">🔍</button>
+   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <h2 style="margin:0;">📋 Task Rater <span style="font-size:0.5em; color:#64748b;">v3.3</span></h2>
+            <div style="display:flex; align-items:center; gap:10px; background: #fff; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0; width: fit-content;">
+                <span id="user-display" style="font-size:0.8em; color:#2563eb; font-weight:bold;"></span>
+                <span style="color: #cbd5e1;">|</span>
+                <button onclick="logout()" style="border:none; background:none; color:#dc2626; cursor:pointer; font-size:0.8em; font-weight:600; padding:0;">Logout</button>
+            </div>
+        </div>
+        <form method="POST" action="/" style="display:flex; gap:8px; align-items:center;">
+            <input type="text" name="search_query" placeholder="Search ID..." style="padding:10px; border-radius:8px; border:1px solid #ccc;">
+            <button type="submit" class="btn-vote" style="background:#2563eb; color:white; border:none; padding:10px;">🔍</button>
         </form>
     </div>
 
-    {% if message %}
-        <div class="msg">{{ message }}</div>
-    {% endif %}
-
     <div class="card">
         <details>
-            <summary style="cursor:pointer; font-weight:bold; color:#2563eb;">➕ Paste New Task / Version</summary>
-            <br>
-            <form method="POST">
-                <textarea name="raw_text" placeholder="Paste full text... If the task ID is the same, it will be added as a new version."></textarea>
-                <button type="submit" class="btn-save">Process & Save</button>
-            </form>
+            <summary style="cursor:pointer; font-weight:bold; color:#2563eb;">➕ Paste New Task</summary>
+            <br><form method="POST"><input type="hidden" name="user_email" id="hidden_user_email"><textarea name="raw_text" placeholder="Paste task text..."></textarea><button type="submit" class="btn-save">Save</button></form>
         </details>
     </div>
 
     {% for task in search_results %}
     <div class="card">
-        
         <div class="task-header">
-            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+            <div style="display:flex; justify-content:space-between;">
                 <span class="task-id">{{ task.task_id }}</span>
-                <span class="header-badge" style="background:#e0f2fe; color:#0369a1;">
-                    {{ task.headers['Task Type'] }}
-                </span>
+                <span class="header-badge">{{ task.headers['Task Type'] }}</span>
             </div>
             <div class="query-text">{{ task.headers['Query'] }}</div>
             <div class="header-meta">
                 <span class="header-badge">🌍 {{ task.headers['Locale'] }}</span>
                 <span class="header-badge">📅 {{ task.headers['Viewport Age'] }}</span>
-                <span class="header-badge">📍 {{ task.headers['Lat, Lng'] }}</span>
             </div>
         </div>
 
         <div class="tab-header">
             {% for ver in task.versions %}
-                <button class="tab-btn {{ 'active' if loop.first else '' }}" 
-                        onclick="openTab(event, 'v-{{ ver.db_id }}', '{{ task.task_id }}')">
-                    Version {{ loop.index }}
+                <button class="tab-btn {{ 'active' if loop.first else '' }}" onclick="openTab(event, 'v-{{ ver.db_id }}', '{{ task.task_id }}')">
+                    Ver {{ loop.index }} <small style="color:#999">by {{ ver.author.split('@')[0] }}</small>
                 </button>
             {% endfor %}
         </div>
 
         {% for ver in task.versions %}
         <div id="v-{{ ver.db_id }}" class="tab-content {{ 'active' if loop.first else '' }} group-{{ task.task_id }}">
-            
             {% for res in ver.results %}
+            {% set is_rated = (res.ratings|length > 0) %}
+            {% set has_caution = (res.downvotes > res.upvotes) %}
             
-            {% set is_rated = (res.ratings|length > 0 and res.ratings[0].value != 'Not Rated' and res.ratings[0].value != '-') %}
-            
-            <div class="res-container {{ 'rated-item' if is_rated else '' }}">
+            <div class="res-container {{ 'res-caution' if has_caution else '' }}" id="res-{{ ver.db_id }}-{{ loop.index0 }}">
                 
-                {% if is_rated %}
-                <div class="vote-box">
-                    <button class="btn-vote" onclick="vote({{ ver.db_id }}, {{ loop.index0 }}, 'up')">
-                        👍 <span id="up-{{ ver.db_id }}-{{ loop.index0 }}" style="color:#059669;">{{ res.upvotes }}</span>
-                    </button>
-                    <button class="btn-vote" onclick="vote({{ ver.db_id }}, {{ loop.index0 }}, 'down')">
-                        👎 <span id="down-{{ ver.db_id }}-{{ loop.index0 }}" style="color:#dc2626;">{{ res.downvotes }}</span>
-                    </button>
-                </div>
-                {% endif %}
-
-                <div class="res-content">
-                    <div>
-                        <span class="res-num">{{ res.num }}</span>
-                        <span class="res-title">{{ res.title }}</span>
+                <div class="res-body-row">
+                    
+                    <div class="res-content">
+                        <div><span class="res-num">{{ res.num }}</span> <span class="res-title">{{ res.title }}</span></div>
+                        <div class="res-sub">{{ res.subtitle }}</div>
+                        <div class="meta-tags">{% for m in res.meta %}<span class="tag"><b>{{ m.label }}:</b> {{ m.value }}</span>{% endfor %}</div>
                     </div>
-                    <div class="res-sub">{{ res.subtitle }}</div>
-                    <div class="meta-tags">
-                        {% for m in res.meta %}
-                            <span class="tag"><b>{{ m.label }}:</b> {{ m.value }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
 
-                {% if is_rated %}
-                <div class="res-ratings">
-                    {% for r in res.ratings %}
-                        {% if r.value and r.value != '-' and r.value != 'None' and r.value != 'Not Rated' %}
-                        <div class="rating-row">
-                            <span class="r-label">{{ r.label }}</span>
-                            {% if r.value.lower() == 'n/a' %}
-                                <span class="r-val val-na">n/a</span>
-                            {% else %}
-                                <span class="r-val val-{{ r.value | replace(' ', '-') }}">{{ r.value }}</span>
-                            {% endif %}
+                    <div class="res-right-panel">
+                        
+                        {% if is_rated %}
+                        <div class="vote-box">
+                             {% set my_vote = res.voters.get(sanitized_user) if res.voters else None %}
+                             <button id="btn-up-{{ ver.db_id }}-{{ loop.index0 }}" class="btn-vote {{ 'vote-active-up' if my_vote == 'up' else '' }}" onclick="vote('{{ task.task_id }}', '{{ ver.db_id }}', {{ loop.index0 }}, 'up')">👍 <span id="up-{{ ver.db_id }}-{{ loop.index0 }}">{{ res.upvotes }}</span></button>
+                             <button id="btn-down-{{ ver.db_id }}-{{ loop.index0 }}" class="btn-vote {{ 'vote-active-down' if my_vote == 'down' else '' }}" onclick="vote('{{ task.task_id }}', '{{ ver.db_id }}', {{ loop.index0 }}, 'down')">👎 <span id="down-{{ ver.db_id }}-{{ loop.index0 }}">{{ res.downvotes }}</span></button>
                         </div>
                         {% endif %}
-                    {% endfor %}
+
+                        {% if is_rated %}
+                        <div class="res-ratings" id="ratings-{{ ver.db_id }}-{{ loop.index0 }}">
+                            {% for r in res.ratings %}
+                                {% if r.value and r.value != '-' and r.value != 'None' %}
+                                    {% if r.label != 'Pin Acc' or (r.label == 'Pin Acc' and r.value != '-') %}
+                                        <div class="rating-row" data-label="{{ r.label }}">
+                                            <span class="r-label">{{ r.label }}</span>
+                                            <span class="r-val val-{{ r.value | replace(' ', '-') }}">{{ r.value }}</span>
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
-                {% endif %}
+
+                <div class="action-bar">
+                    {% if ver.author == sanitized_user or True %}
+                    <button class="btn-mini author-btn" data-author="{{ ver.author }}" style="display:none;" 
+                            onclick="enableEdit('{{ task.task_id }}', '{{ ver.db_id }}', {{ loop.index0 }})">
+                        <i class="fa-solid fa-pen"></i> Edit
+                    </button>
+                    {% endif %}
+                    <button class="btn-mini" onclick="toggleNoteBox('{{ ver.db_id }}', {{ loop.index0 }})">
+                        <i class="fa-solid fa-comment"></i> Note
+                    </button>
+                </div>
+
+                <div class="notes-section">
+                    {% if res.notes %}
+                        {% for nid, note in res.notes.items() %}
+                            <div class="note-item">
+                                <div><span class="note-user">{{ note.user.split('@')[0] }}:</span> <span>{{ note.text }}</span></div>
+                                {% if note.user == sanitized_user.replace(',', '.') %}
+                                <span class="del-note-btn" onclick="deleteNote('{{ task.task_id }}', '{{ ver.db_id }}', {{ loop.index0 }}, '{{ nid }}')" title="Delete">×</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div id="note-input-{{ ver.db_id }}-{{ loop.index0 }}" style="display:none; margin-top:5px; gap:5px;">
+                    <input type="text" id="txt-note-{{ ver.db_id }}-{{ loop.index0 }}" placeholder="Add comment..." style="flex:1; padding:4px; border:1px solid #ccc; font-size:0.85em;">
+                    <button class="btn-mini" style="background:#3b82f6; color:white;" onclick="saveNote('{{ task.task_id }}', '{{ ver.db_id }}', {{ loop.index0 }})">Post</button>
+                </div>
 
             </div>
-            {% endfor %} </div>
-        {% endfor %} </div>
-    {% endfor %} </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
 
 <script>
-// Tab Switching Logic
-function openTab(evt, tabId, groupName) {
-    // 1. Hide all tabs in this specific group (Task ID)
-    var contents = document.getElementsByClassName("group-" + groupName);
-    for (var i = 0; i < contents.length; i++) {
-        contents[i].classList.remove("active");
-    }
-
-    // 2. Remove 'active' class from buttons in this container
-    // We navigate up to the parent (.tab-header) to find sibling buttons
+function openTab(evt, tabId, group) {
+    var contents = document.getElementsByClassName("group-" + group);
+    for (var i = 0; i < contents.length; i++) contents[i].classList.remove("active");
     var buttons = evt.currentTarget.parentElement.getElementsByClassName("tab-btn");
-    for (var i = 0; i < buttons.length; i++) {
-        buttons[i].classList.remove("active");
-    }
-
-    // 3. Show the clicked tab and activate button
+    for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove("active");
     document.getElementById(tabId).classList.add("active");
     evt.currentTarget.classList.add("active");
 }
 
-function vote(dbId, idx, type) {
+function vote(taskId, verId, idx, type) {
     fetch('/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: dbId, idx: idx, type: type })
-    })
-    .then(res => res.json())
-    .then(data => {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, ver_id: verId, idx: idx, type: type, user_email: currentUserEmail })
+    }).then(res => res.json()).then(data => {
         if(data.success) {
-            document.getElementById(`up-${dbId}-${idx}`).innerText = data.up;
-            document.getElementById(`down-${dbId}-${idx}`).innerText = data.down;
+            document.getElementById(`up-${verId}-${idx}`).innerText = data.up;
+            document.getElementById(`down-${verId}-${idx}`).innerText = data.down;
+            const btnUp = document.getElementById(`btn-up-${verId}-${idx}`);
+            const btnDown = document.getElementById(`btn-down-${verId}-${idx}`);
+            btnUp.classList.remove('vote-active-up'); btnDown.classList.remove('vote-active-down');
+            if(data.user_status === 'up') btnUp.classList.add('vote-active-up');
+            if(data.user_status === 'down') btnDown.classList.add('vote-active-down');
         }
     });
 }
-</script>
 
+function deleteNote(taskId, verId, idx, noteId) {
+    if(!confirm("Delete this comment?")) return;
+    fetch('/delete_note', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, ver_id: verId, idx: idx, note_id: noteId, user_email: currentUserEmail })
+    }).then(res => res.json()).then(data => { if(data.success) location.reload(); else alert(data.error); });
+}
+
+function toggleNoteBox(verId, idx) {
+    const box = document.getElementById(`note-input-${verId}-${idx}`);
+    box.style.display = (box.style.display === 'none') ? 'flex' : 'none';
+}
+
+function saveNote(taskId, verId, idx) {
+    const txt = document.getElementById(`txt-note-${verId}-${idx}`).value;
+    if(!txt) return;
+    fetch('/add_note', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ task_id: taskId, ver_id: verId, idx: idx, note_text: txt, user_email: currentUserEmail })
+    }).then(() => location.reload());
+}
+
+function enableEdit(taskId, verId, idx) {
+    const container = document.getElementById(`ratings-${verId}-${idx}`);
+    if(container.classList.contains('edit-mode')) return;
+    container.classList.add('edit-mode');
+    const rows = container.getElementsByClassName('rating-row');
+    Array.from(rows).forEach(row => {
+        const label = row.getAttribute('data-label');
+        const valSpan = row.querySelector('.r-val');
+        const currentVal = valSpan.innerText;
+        row.innerHTML = `<span class="r-label">${label}</span> <input type="text" value="${currentVal}" class="edit-input">`;
+    });
+    const btnDiv = document.createElement('div');
+    btnDiv.style.marginTop = "8px";
+    btnDiv.innerHTML = `<button class="btn-mini" style="background:#22c55e; color:white; width:100%; justify-content:center;" onclick="saveEdit('${taskId}', '${verId}', ${idx})">Save Changes</button>`;
+    container.appendChild(btnDiv);
+}
+
+function saveEdit(taskId, verId, idx) {
+    const container = document.getElementById(`ratings-${verId}-${idx}`);
+    const inputs = container.querySelectorAll('.edit-input');
+    const newRatings = [];
+    inputs.forEach(input => {
+        const row = input.parentElement;
+        const label = row.querySelector('.r-label').innerText;
+        newRatings.push({ label: label, value: input.value });
+    });
+    fetch('/edit_result', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ task_id: taskId, ver_id: verId, idx: idx, new_ratings: newRatings, user_email: currentUserEmail })
+    }).then(res => res.json()).then(data => { if(data.success) location.reload(); else alert(data.error); });
+}
+
+firebase.auth().onAuthStateChanged((user) => {
+    if (user) {
+        document.querySelectorAll('.author-btn').forEach(btn => {
+            if(btn.dataset.author === user.email) btn.style.display = 'inline-block';
+        });
+    }
+});
+</script>
 </body>
 </html>

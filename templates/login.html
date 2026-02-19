@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Task Rater</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; height: 100vh; align-items: center; justify-content: center; margin: 0; }
+        .login-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; }
+        h2 { color: #1e293b; margin-bottom: 20px; font-weight: 600; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 0.95rem; }
+        input:focus { outline: none; border-color: #2563eb; ring: 2px #bfdbfe; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; margin-top: 15px; transition: 0.2s; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .toggle-link { color: #2563eb; cursor: pointer; font-size: 0.85em; margin-top: 20px; display: block; text-decoration: none; }
+        .toggle-link:hover { text-decoration: underline; }
+        .error { color: #dc2626; font-size: 0.85em; margin-top: 12px; display: none; background: #fee2e2; padding: 8px; border-radius: 4px; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+
+<div class="login-card">
+    <h2 id="form-title">Login</h2>
+    <div id="error-msg" class="error"></div>
+    
+    <input type="email" id="email" placeholder="Email Address">
+    <input type="password" id="password" placeholder="Password">
+    
+    <button class="btn-primary" onclick="handleAuth()" id="submit-btn">Sign In</button>
+    
+    <span class="toggle-link" onclick="toggleMode()" id="toggle-text">New here? Create an account</span>
+</div>
+
+<script>
+    // This reads the config passed automatically from app.py
+    const firebaseConfig = {{ firebase_config | tojson }};
+    firebase.initializeApp(firebaseConfig);
+
+    let isLogin = true;
+
+    function toggleMode() {
+        isLogin = !isLogin;
+        const title = document.getElementById('form-title');
+        const btn = document.getElementById('submit-btn');
+        const toggle = document.getElementById('toggle-text');
+        const errorDiv = document.getElementById('error-msg');
+
+        title.innerText = isLogin ? "Login" : "Create Account";
+        btn.innerText = isLogin ? "Sign In" : "Sign Up";
+        toggle.innerText = isLogin ? "New here? Create an account" : "Already have an account? Login";
+        errorDiv.style.display = 'none';
+    }
+
+    function handleAuth() {
+        const email = document.getElementById('email').value.trim();
+        const pass = document.getElementById('password').value;
+        const errorDiv = document.getElementById('error-msg');
+
+        if (!email || !pass) {
+            errorDiv.innerText = "Please fill in all fields";
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        const authPromise = isLogin 
+            ? firebase.auth().signInWithEmailAndPassword(email, pass)
+            : firebase.auth().createUserWithEmailAndPassword(email, pass);
+
+        authPromise
+            .then((userCredential) => {
+                // Success! The Auth Guard in home.html will handle the rest
+                window.location.href = "/";
+            })
+            .catch((error) => {
+                console.error("Auth Error:", error.code);
+                // Friendly error messages
+                let friendlyMsg = error.message;
+                if (error.code === 'auth/wrong-password') friendlyMsg = "Incorrect password.";
+                if (error.code === 'auth/user-not-found') friendlyMsg = "No account found with this email.";
+                if (error.code === 'auth/email-already-in-use') friendlyMsg = "This email is already registered.";
+                
+                errorDiv.innerText = friendlyMsg;
+                errorDiv.style.display = 'block';
+            });
+    }
+
+    // Auto-redirect if user is already logged in
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            window.location.href = "/";
+        }
+    });
+</script>
+
+</body>
+</html>
