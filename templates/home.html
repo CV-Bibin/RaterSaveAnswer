@@ -112,10 +112,17 @@
                 <button onclick="logout()" style="border:none; background:none; color:#dc2626; cursor:pointer; font-size:0.8em; font-weight:600; padding:0;">Logout</button>
             </div>
         </div>
-        <form method="POST" action="/?u={{ sanitized_user.replace(',', '.') }}" style="display:flex; gap:8px; align-items:center;">
-            <input type="text" name="search_query" placeholder="Search ID..." style="padding:10px; border-radius:8px; border:1px solid #ccc;">
-            <button type="submit" class="btn-vote" style="background:#2563eb; color:white; border:none; padding:10px;">🔍</button>
-        </form>
+       <form method="POST" action="/?u={{ sanitized_user.replace(',', '.') }}" style="display:flex; gap:10px; align-items:center; background: #fff; padding: 6px 10px; border-radius: 30px; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+    <i class="fa-solid fa-magnifying-glass" style="color: #94a3b8; margin-left: 8px;"></i>
+    
+    <input type="text" name="search_query" placeholder="Search Task ID or Query..." style="border: none; outline: none; width: 260px; font-size: 0.95em; background: transparent; padding: 4px 0;">
+    
+    <button type="submit" style="background:#2563eb; color:white; border:none; padding:8px 18px; border-radius:20px; cursor:pointer; font-weight:600; font-size:0.85em;">Search</button>
+    
+    {% if is_search %}
+        <a href="/?u={{ sanitized_user.replace(',', '.') }}" style="text-decoration:none; background:#f1f5f9; color:#ef4444; padding:8px 16px; border-radius:20px; font-size:0.85em; font-weight:bold; border: 1px solid #e2e8f0;">Clear</a>
+    {% endif %}
+</form>
     </div>
 
     <div class="card">
