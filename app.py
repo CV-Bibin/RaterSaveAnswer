@@ -1,7 +1,8 @@
 import os
 import json
 import re
-from flask import Flask, render_template, request, jsonify
+# ADDED 'redirect' HERE:
+from flask import Flask, render_template, request, jsonify, redirect
 import firebase_admin
 from firebase_admin import credentials, db
 from dotenv import load_dotenv
@@ -106,7 +107,6 @@ def process_text(text):
       # Ratings table (Left side)
         ratings_table = [
             {"label": "Relevance", "value": rel_val},
-            # UPDATE: Now catches both "Name Accuracy" and "Name and Category Accuracy"
             {"label": "Name Acc", "value": get_val(r'(?:Name Accuracy|Name and Category Accuracy)\s*\n(.+)')},
             {"label": "Address Acc", "value": get_val(r'Address Accuracy\s*\n(.+)')},
             {"label": "Pin Acc", "value": get_val(r'(?:Pin Accuracy|Pin/Zip Accuracy)\s*\n(.+)')}
@@ -121,7 +121,7 @@ def process_text(text):
             "upvotes": 0,
             "downvotes": 0,
             "voters": {},
-            "notes": {} # New: Storage for comments
+            "notes": {}
         })
 
     return headers.get("Task ID", ""), headers.get("Query", ""), headers, processed_results
@@ -146,6 +146,11 @@ def login_page():
 @app.route('/', methods=['GET', 'POST'])
 def home():
     message = ""
+    
+    # ADDED: Catch the success message from the redirect
+    if request.args.get('msg') == 'success':
+        message = "✅ Version saved successfully!"
+
     current_user_email = request.args.get('u', "").strip().lower()
     sanitized_user = current_user_email.replace('.', ',')
 
@@ -175,12 +180,15 @@ def home():
                         'rating_results': results, 'submitted_by': user_email,
                         'timestamp': {'.sv': 'timestamp'}
                     })
-                    message = "✅ Version saved successfully!"
+                    
+                    # ADDED: Redirect after saving to prevent browser reload bugs
+                    return redirect(f"/?u={current_user_email}&msg=success")
+                    
             except Exception as e:
                 message = f"Error: {str(e)}"
 
     ref = db.reference('tasks')
-    snapshot = ref.order_by_key().limit_to_last(40).get()
+    snapshot = ref.order_by_key().limit_to_last(150).get() 
     
     all_tasks = []
     if snapshot:
@@ -194,39 +202,48 @@ def home():
                     'results': vdata.get('rating_results', []),
                     'author': vdata.get('submitted_by'),
                     'voters': vdata.get('voters', {}),
-                    'notes': vdata.get('notes', {}) # Pass notes to template
+                    'notes': vdata.get('notes', {})
                 })
             all_tasks.append({'task_id': tid, 'headers': h_data, 'query': q_str, 'versions': v_list})
 
-    search_results = all_tasks
-    if request.method == 'POST' and 'search_query' in request.form:
+    is_search = False
+    
+    if request.method == 'POST' and 'search_query' in request.form and request.form['search_query'].strip():
         sq = request.form['search_query'].strip().lower()
         search_results = [t for t in all_tasks if sq in t['task_id'].lower() or sq in t['query'].lower()]
+        is_search = True
+    else:
+        # DEFAULT DASHBOARD MODE: Strictly show ONLY the current user's posts
+        search_results = []
+        if current_user_email:
+            for t in all_tasks:
+                # Create a list of versions that ONLY belong to the current user
+                my_versions = [v for v in t['versions'] if v['author'] == current_user_email]
+                
+                # If the user posted at least one version in this task, add it to the dashboard
+                if my_versions:
+                    task_copy = t.copy()
+                    task_copy['versions'] = my_versions # Overwrite versions so others are hidden
+                    search_results.append(task_copy)
 
-    return render_template('home.html', search_results=search_results, message=message, firebase_config=get_fb_config(), sanitized_user=sanitized_user)
+    return render_template('home.html', search_results=search_results, message=message, firebase_config=get_fb_config(), sanitized_user=sanitized_user, is_search=is_search)
 
-# --- NEW: EDIT RESULT (AUTHOR ONLY) ---
 @app.route('/edit_result', methods=['POST'])
 def edit_result():
     data = request.json
-    # Path to the specific result's ratings list
     path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/ratings"
     ver_ref = db.reference(f"tasks/{data['task_id']}/{data['ver_id']}")
     
-    # Check if user is the author
     if ver_ref.get().get('submitted_by') == data['user_email']:
-        # Update the ratings list with new data
         db.reference(path).set(data['new_ratings'])
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "Unauthorized"})
 
-# --- NEW: ADD NOTE (ALL USERS) ---
 @app.route('/add_note', methods=['POST'])
 def add_note():
     data = request.json
     if not data.get('note_text'): return jsonify({"success": False})
     
-    # Path to notes for this specific result
     path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/notes"
     
     note_obj = {
@@ -238,25 +255,19 @@ def add_note():
     db.reference(path).push().set(note_obj)
     return jsonify({"success": True})
 
-
-# --- NEW: DELETE NOTE ---
 @app.route('/delete_note', methods=['POST'])
 def delete_note():
     data = request.json
-    # Path: tasks/{tid}/{vid}/rating_results/{idx}/notes/{note_id}
     path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/notes/{data['note_id']}"
     
     note_ref = db.reference(path)
     note_data = note_ref.get()
     
-    # Check if the user trying to delete is the one who wrote it
     if note_data and note_data.get('user') == data['user_email']:
         note_ref.delete()
         return jsonify({"success": True})
     
     return jsonify({"success": False, "error": "Unauthorized: You can only delete your own notes."})
-
-
 
 @app.route('/vote', methods=['POST'])
 def vote():

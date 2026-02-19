@@ -111,7 +111,7 @@
                 <button onclick="logout()" style="border:none; background:none; color:#dc2626; cursor:pointer; font-size:0.8em; font-weight:600; padding:0;">Logout</button>
             </div>
         </div>
-        <form method="POST" action="/" style="display:flex; gap:8px; align-items:center;">
+        <form method="POST" action="/?u={{ sanitized_user.replace(',', '.') }}" style="display:flex; gap:8px; align-items:center;">
             <input type="text" name="search_query" placeholder="Search ID..." style="padding:10px; border-radius:8px; border:1px solid #ccc;">
             <button type="submit" class="btn-vote" style="background:#2563eb; color:white; border:none; padding:10px;">🔍</button>
         </form>
@@ -132,16 +132,20 @@
                 <span class="header-badge">{{ task.headers['Task Type'] }}</span>
             </div>
             <div class="query-text">{{ task.headers['Query'] }}</div>
-            <div class="header-meta">
-                <span class="header-badge">🌍 {{ task.headers['Locale'] }}</span>
-                <span class="header-badge">📅 {{ task.headers['Viewport Age'] }}</span>
-            </div>
+           <div class="header-meta">
+    <span class="header-badge">🌍 {{ task.headers['Locale'] }}</span>
+    <span class="header-badge">📅 {{ task.headers['Viewport Age'] }}</span>
+    <span class="header-badge">📍 {{ task.headers['Lat, Lng'] }}</span>
+</div>
         </div>
 
-        <div class="tab-header">
+       <div class="tab-header">
             {% for ver in task.versions %}
-                <button class="tab-btn {{ 'active' if loop.first else '' }}" onclick="openTab(event, 'v-{{ ver.db_id }}', '{{ task.task_id }}')">
-                    Ver {{ loop.index }} <small style="color:#999">by {{ ver.author.split('@')[0] }}</small>
+                {% set is_my_tab = (ver.author == sanitized_user.replace(',', '.')) %}
+                <button class="tab-btn {{ 'active' if loop.first else '' }}" 
+                        onclick="openTab(event, 'v-{{ ver.db_id }}', '{{ task.task_id }}')"
+                        style="{% if is_my_tab %}color: #059669; font-weight: bold;{% endif %}">
+                    Ver {{ loop.index }} <small style="color:{% if is_my_tab %}#059669{% else %}#999{% endif %}">by {{ ver.author.split('@')[0] }}</small>
                 </button>
             {% endfor %}
         </div>
@@ -152,7 +156,7 @@
             {% set is_rated = (res.ratings|length > 0) %}
             {% set has_caution = (res.downvotes > res.upvotes) %}
             
-            <div class="res-container {{ 'res-caution' if has_caution else '' }}" id="res-{{ ver.db_id }}-{{ loop.index0 }}">
+            <div class="res-container {{ 'res-caution' if has_caution else '' }} {{ 'rated-item' if is_rated else '' }}" id="res-{{ ver.db_id }}-{{ loop.index0 }}">
                 
                 <div class="res-body-row">
                     
