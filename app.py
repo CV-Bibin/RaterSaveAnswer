@@ -1,7 +1,6 @@
 import os
 import json
 import re
-# ADDED 'redirect' HERE:
 from flask import Flask, render_template, request, jsonify, redirect
 import firebase_admin
 from firebase_admin import credentials, db
@@ -30,7 +29,6 @@ def initialize_firebase():
 initialize_firebase()
 
 # --- Helper Functions ---
-
 def clean_value(val):
     if not val: return "-"
     if val.strip().lower() == "n/a": return "n/a"
@@ -104,7 +102,6 @@ def process_text(text):
         rel_m = re.search(r'Relevance\s*\n(.+)', content)
         rel_val = rel_m.group(1).strip() if rel_m else "Not Rated"
 
-      # Ratings table (Left side)
         ratings_table = [
             {"label": "Relevance", "value": rel_val},
             {"label": "Name Acc", "value": get_val(r'(?:Name Accuracy|Name and Category Accuracy)\s*\n(.+)')},
@@ -126,8 +123,6 @@ def process_text(text):
 
     return headers.get("Task ID", ""), headers.get("Query", ""), headers, processed_results
 
-# --- ROUTES ---
-
 def get_fb_config():
     return {
         "apiKey": os.getenv("FIREBASE_API_KEY"),
@@ -139,6 +134,8 @@ def get_fb_config():
         "appId": os.getenv("FIREBASE_APP_ID")
     }
 
+# --- ROUTES ---
+
 @app.route('/login')
 def login_page():
     return render_template('login.html', firebase_config=get_fb_config())
@@ -146,8 +143,6 @@ def login_page():
 @app.route('/', methods=['GET', 'POST'])
 def home():
     message = ""
-    
-    # ADDED: Catch the success message from the redirect
     if request.args.get('msg') == 'success':
         message = "✅ Version saved successfully!"
 
@@ -166,13 +161,11 @@ def home():
                     task_ref = ref.child(t_id)
                     snapshot = task_ref.get()
                     
-                    is_duplicate = False
                     new_results_json = json.dumps(results)
                     
                     if snapshot:
                         for key, val in snapshot.items():
                             if json.dumps(val.get('rating_results')) == new_results_json:
-                                is_duplicate = True
                                 break
                     
                     task_ref.push().set({
@@ -181,7 +174,6 @@ def home():
                         'timestamp': {'.sv': 'timestamp'}
                     })
                     
-                    # ADDED: Redirect after saving to prevent browser reload bugs
                     return redirect(f"/?u={current_user_email}&msg=success")
                     
             except Exception as e:
@@ -200,7 +192,7 @@ def home():
                 v_list.append({
                     'db_id': vid, 
                     'results': vdata.get('rating_results', []),
-                    'author': vdata.get('submitted_by'),
+                    'author': vdata.get('submitted_by', ''),
                     'voters': vdata.get('voters', {}),
                     'notes': vdata.get('notes', {})
                 })
@@ -213,17 +205,14 @@ def home():
         search_results = [t for t in all_tasks if sq in t['task_id'].lower() or sq in t['query'].lower()]
         is_search = True
     else:
-        # DEFAULT DASHBOARD MODE: Strictly show ONLY the current user's posts
         search_results = []
         if current_user_email:
             for t in all_tasks:
-                # Create a list of versions that ONLY belong to the current user
-                my_versions = [v for v in t['versions'] if v['author'] == current_user_email]
-                
-                # If the user posted at least one version in this task, add it to the dashboard
+                # FIXED: Force lowercase comparison to prevent hidden tasks
+                my_versions = [v for v in t['versions'] if v.get('author', '').lower() == current_user_email]
                 if my_versions:
                     task_copy = t.copy()
-                    task_copy['versions'] = my_versions # Overwrite versions so others are hidden
+                    task_copy['versions'] = my_versions
                     search_results.append(task_copy)
 
     return render_template('home.html', search_results=search_results, message=message, firebase_config=get_fb_config(), sanitized_user=sanitized_user, is_search=is_search)
@@ -234,7 +223,8 @@ def edit_result():
     path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/ratings"
     ver_ref = db.reference(f"tasks/{data['task_id']}/{data['ver_id']}")
     
-    if ver_ref.get().get('submitted_by') == data['user_email']:
+    # FIXED: Case-insensitive authorization
+    if ver_ref.get().get('submitted_by', '').lower() == data['user_email'].lower():
         db.reference(path).set(data['new_ratings'])
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "Unauthorized"})
@@ -245,13 +235,11 @@ def add_note():
     if not data.get('note_text'): return jsonify({"success": False})
     
     path = f"tasks/{data['task_id']}/{data['ver_id']}/rating_results/{data['idx']}/notes"
-    
     note_obj = {
         "user": data['user_email'],
         "text": data['note_text'],
         "timestamp": {'.sv': 'timestamp'}
     }
-    
     db.reference(path).push().set(note_obj)
     return jsonify({"success": True})
 
@@ -263,7 +251,8 @@ def delete_note():
     note_ref = db.reference(path)
     note_data = note_ref.get()
     
-    if note_data and note_data.get('user') == data['user_email']:
+    # FIXED: Case-insensitive authorization check (Resolves the "Unauthorized" popup)
+    if note_data.get('user','').lower() == data['user_email'].lower():
         note_ref.delete()
         return jsonify({"success": True})
     
@@ -276,11 +265,11 @@ def vote():
     ver_id = data.get('ver_id')
     res_idx = data.get('idx')
     vote_type = data.get('type')
-    user_email = data.get('user_email')
+    user_email = data.get('user_email').lower()
 
     if not user_email: return jsonify({"success": False, "error": "Login required"})
 
-    user_key = user_email.replace('.', ',')
+    user_key = user_email.lower().replace('.', ',')
     path = f"tasks/{task_id}/{ver_id}/rating_results/{res_idx}"
     item_ref = db.reference(path)
 
